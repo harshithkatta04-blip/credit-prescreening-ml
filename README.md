@@ -1,244 +1,166 @@
+# Credit Pre-Screening Engine — Loan Intake Optimisation
 
-# Credit Pre-Screening Engine
-### Risk-Aware Loan Intake Optimisation Using Machine Learning
+An end-to-end machine learning project for analysing historical personal-loan decisions and designing a selective credit pre-screening system.
 
-An end-to-end machine learning project focused on improving personal loan application screening through predictive modelling, risk-based decision thresholds, and fairness evaluation.
-
-**Domain:** Banking, Financial Services and Insurance (BFSI)  
-**Project Type:** Supervised Learning | Classification  
-**Status:** In Development  
-**Origin:** Calibo AI Academy — Phase 2 Mini Use Case 02
-
----
+**Domain:** Banking & Financial Services (BFSI)  
+**Project:** Calibo AI Academy — Phase 2, Mini Use Case 02  
+**Tech Stack:** Python, Pandas, NumPy, scikit-learn, Matplotlib, Seaborn, Jupyter Notebook
 
 ## 1. Business Problem
 
-A mid-sized Indian private bank processes approximately 3,000 personal loan applications every month.
+A retail lender processes approximately **3,000 personal-loan applications per month**, with each manual review taking around **25 minutes**.
 
-Currently, each application undergoes manual credit assessment, requiring approximately 25 minutes per application.
+The objective is to reduce manual-review workload by routing applications into three lanes:
 
-Nearly half of the applications are declined, with many straightforward cases identifiable early in the review process.
+- **Auto-decline:** High-confidence historical decline predictions.
+- **Fast-track:** High-confidence historical approval predictions, subject to a light-touch check.
+- **Manual review:** Applications that require human judgement.
 
-This creates:
-- Unnecessary analyst workload
-- Operational inefficiency
-- Potential delays in loan decisions
+Each automated lane must have **no more than 5% disagreement with historical credit-team decisions**.
 
-The objective is to reduce full manual reviews while controlling the risk of incorrect automated decisions.
+## 2. Dataset
 
-## 2. Proposed Solution
+The project uses a simulated dataset containing **12,000 loan applications** from April–September 2026.
 
-Develop a machine learning-based credit pre-screening engine with three decision lanes.
+- Historically approved: **52.94%**
+- Historically declined: **47.06%**
+- Target: `decision` — Approved (0), Declined (1)
 
-| Decision Lane | Action |
-|---|---|
-| Auto-Decline | Automatically decline applications with sufficiently low predicted approval probability |
-| Manual Review | Route uncertain applications to credit analysts |
-| Fast-Track | Route applications with sufficiently high predicted approval probability for a light-touch approval check |
+**Important:** The target represents historical analyst decisions, not actual loan defaults or repayment outcomes.
 
-Decision thresholds will be selected based on the bank's specified risk limits.
+## 3. Project Workflow
 
-### Business Constraints
+1. **Data Quality:** Investigated missing income, new-to-credit applicants and unusual income values.
+2. **Exploratory Analysis:** Studied approval patterns across credit score, employment, affordability and other applicant characteristics.
+3. **Feature Engineering:** Created FOIR, loan-to-income ratio and new-to-credit indicator.
+4. **Baseline Modelling:** Trained and evaluated Logistic Regression using a reusable preprocessing pipeline.
+5. **Fairness Audit:** Compared historical and model outcomes across gender groups.
+6. **Model Comparison:** Evaluated four classifiers using five-fold stratified cross-validation.
+7. **Two-Lane Optimisation:** Searched approval-probability thresholds under separate 5% disagreement constraints.
+8. **Applicant Segmentation:** Used K-Means to profile seven applicant groups and analyse classification errors.
+9. **Validation Audit:** Re-selected thresholds using training-only out-of-fold predictions and evaluated the fixed rules on the test split.
 
-- Wrong auto-decline rate must not exceed 5%.
-- Wrong fast-track rate must not exceed 5%.
-- Maximise applications removed from full manual review while satisfying both constraints.
-- Evaluate fairness across applicant groups.
+## 4. Model Comparison
 
-The error limits are measured against historical analyst decisions, not actual repayment outcomes.
+Five-fold stratified cross-validation on training data:
 
-## 3. Dataset
+| Model | ROC-AUC | Accuracy |
+|---|---:|---:|
+| Gradient Boosting | **0.8897** | **80.03%** |
+| Random Forest | 0.8779 | 79.42% |
+| Logistic Regression | 0.8676 | 77.46% |
+| Decision Tree | 0.7232 | 72.42% |
 
-The assignment provides a simulated dataset containing 12,000 personal loan applications collected between April and September 2026.
+**Selected candidate:** Gradient Boosting, based on its stronger cross-validated discrimination.
 
-### Important Features
+On the test split, Gradient Boosting achieved **80.29% accuracy** and **0.8853 ROC-AUC**.
 
-| Feature | Description |
-|---|---|
-| credit_score | Applicant's credit bureau score |
-| monthly_income | Declared gross monthly income |
-| existing_emi | Existing monthly loan repayments |
-| proposed_emi | Estimated EMI for the requested loan |
-| employment_type | Applicant's employment category |
-| delinquencies_24m | Late or missed repayments in the past 24 months |
-| loan_amount | Requested loan amount |
-| credit_history_months | Length of credit history |
-| decision | Historical analyst decision: Approved or Declined |
+Its principal features included recent delinquencies, credit score and FOIR.
 
-### Engineered Features
+## 5. Final Threshold Validation
 
-**Fixed Obligation to Income Ratio (FOIR)**
+Thresholds were selected using five-fold out-of-fold predictions from training data. They were then applied without adjustment to the test split.
 
-FOIR = (Existing EMI + Proposed EMI) / Monthly Income
+All thresholds refer to the **predicted probability of approval**.
 
-**Loan-to-Income Ratio**
+| Metric | Gradient Boosting | Logistic Regression |
+|---|---:|---:|
+| Auto-decline below | 0.15 | 0.11 |
+| Fast-track above | 0.88 | 0.91 |
+| Auto-decline disagreement | 4.21% | 5.44% |
+| Fast-track disagreement | 5.14% | 4.15% |
+| Automation coverage | 43.00% | 30.12% |
+| Both lanes satisfy 5%? | **No** | **No** |
 
-Loan-to-Income = Loan Amount / (Monthly Income × 12)
+Gradient Boosting routed 546 test applications to auto-decline, 486 to fast-track and 1,368 to manual review.
 
-**New-to-Credit Indicator**
+Its **43% potential automation coverage** corresponds to approximately **1,290 full reviews or 537.5 gross analyst-hours avoided per month**, assuming comparable application volumes. This estimate is conditional and does not account for light-touch review time.
 
-is_ntc = 1 when credit score is missing, otherwise 0.
+**Neither complete two-lane configuration is ready for deployment**, because each model exceeds the disagreement limit in one automated lane.
 
-The provided dataset is kept outside Git until redistribution permissions are confirmed.
+## 6. Fairness and Segmentation
 
-## 4. Project Architecture
+The historical approval rate was **50.43% for female applicants** and **54.10% for male applicants**.
+
+At the earlier exploratory 0.90 decline-probability threshold, auto-decline rates were 15.73% for females and 14.67% for males. These descriptive results do not establish model fairness; the final two-lane configuration requires a separate fairness audit.
+
+K-Means segmentation identified seven applicant groups. Applicants with unusual or unverified income values were highlighted for human verification, while higher-income and younger segments showed opportunities for further model-error analysis.
+
+## 7. Repository Structure
 
 ```text
 credit-prescreening-ml/
-|
-|-- data/
-|   |-- raw/
-|   |-- processed/
-|
-|-- notebooks/
-|   |-- 01_credit_prescreening.ipynb
-|
-|-- src/
-|   |-- data/
-|   |-- features/
-|   |-- models/
-|   |-- evaluation/
-|
-|-- tests/
-|-- models/
-|-- reports/
-|   |-- figures/
-|
-|-- .gitignore
-|-- pyproject.toml
-|-- requirements.txt
-|-- README.md
+├── data/
+│   ├── raw/
+│   └── processed/
+├── notebooks/
+│   └── 01_credit_prescreening.ipynb
+├── reports/
+│   └── figures/
+├── src/
+│   ├── data/
+│   │   └── imputation.py
+│   ├── features/
+│   │   └── engineering.py
+│   └── evaluation/
+├── tests/
+│   ├── test_imputation.py
+│   └── test_feature_engineering.py
+├── README.md
+├── requirements.txt
+└── pyproject.toml
 ```
 
-The notebook follows the assignment workflow, while reusable logic will be implemented in Python modules under `src/`.
-
-## 5. Machine Learning Methodology
-
-### Phase 1 — Business Understanding
-- Complete the CBIM Problem Canvas
-- Identify stakeholders and success criteria
-- Define business risks and limitations
-
-### Phase 2 — Data Preparation
-- Data quality assessment
-- Missing value treatment
-- Exploratory data analysis
-- Feature engineering
-
-### Phase 3 — Baseline Modelling
-- Logistic Regression baseline
-- Classification metrics
-- Confusion matrix analysis
-- Baseline auto-decline threshold selection
-
-### Phase 4 — Model Comparison
-Evaluate:
-- Logistic Regression
-- Decision Tree
-- Random Forest
-- Gradient Boosting
-
-Use 5-fold Stratified Cross-Validation on the training set.
-
-Primary evaluation measures:
-- ROC-AUC
-- Accuracy
-- Precision
-- Recall
-
-### Phase 5 — Risk-Based Decision Optimisation
-- Auto-decline threshold optimisation
-- Fast-track threshold optimisation
-- Three-lane application routing
-- Model comparison against the baseline
-- Analyst workload impact calculation
-
-### Phase 6 — Fairness and Business Evaluation
-- Historical approval disparities
-- Group-wise automated decline rates
-- Potential proxy-variable bias
-- Operational savings
-- Credit policy recommendation
-
-### Optional Analysis
-K-Means segmentation to identify applicant groups where model performance requires additional human oversight.
-
-## 6. Technology Stack
-
-| Category | Technology |
-|---|---|
-| Language | Python |
-| Data Processing | Pandas, NumPy |
-| Visualisation | Matplotlib, Seaborn |
-| Machine Learning | scikit-learn |
-| Model Persistence | joblib |
-| Experimentation | Jupyter Notebook |
-| Testing | pytest |
-| Version Control | Git, GitHub |
-
-## 7. Installation
+## 8. Setup and Execution
 
 Clone the repository:
 
 ```bash
-git clone <REPOSITORY_URL>
+git clone https://github.com/harshithkatta04-blip/credit-prescreening-ml.git
 cd credit-prescreening-ml
 ```
 
-Create a virtual environment:
+Create a virtual environment and install dependencies:
 
 ```bash
 python -m venv .venv
 ```
 
-Activate the environment.
-
-Windows PowerShell:
+On Windows PowerShell:
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+pip install -e .
 ```
 
-Install dependencies:
+Open `notebooks/01_credit_prescreening.ipynb` in VS Code or Jupyter and run the cells sequentially.
+
+The dataset is expected at:
+
+`data/raw/MUC02_Credit_PreScreening_Dataset.csv`
+
+Run automated tests:
 
 ```bash
-python -m pip install -r requirements.txt
-python -m pip install -e .
+python -m pytest tests/ -v
 ```
 
-Place the course-provided dataset in `data/raw/`.
+## 9. Limitations and Future Work
 
-Launch Jupyter:
+- Historical approval decisions are not ground-truth repayment outcomes.
+- Earlier exploratory threshold searches used the test labels; the later audit used training-only out-of-fold threshold selection.
+- The test split was previously inspected, so fresh independent validation remains necessary.
+- Automated-lane error rates require further stability, fairness and calibration assessments.
+- Extreme-income records require additional data-quality verification.
+- A controlled, human-supervised pilot is recommended before any operational deployment.
 
-```bash
-jupyter lab
-```
+## 10. Conclusion
 
-Open `notebooks/01_credit_prescreening.ipynb`.
+Gradient Boosting demonstrated stronger prediction performance and greater potential automation coverage than Logistic Regression.
 
-## 8. Results
+However, the final audit showed that **neither proposed two-lane configuration fully satisfies the bank's 5% historical-disagreement requirement**.
 
-Model evaluation results, selected thresholds, fairness findings and estimated analyst hours saved will be added after experiments are completed.
+The project therefore recommends further validation and a human-supervised pilot rather than immediate automated lending decisions.
 
-No model is currently claimed to be production-ready.
-
-## 9. Limitations
-
-- Historical credit decisions are used as reference labels.
-- Actual repayment and default outcomes are unavailable.
-- Historical decisions may contain policy biases.
-- Model agreement with historical decisions does not guarantee lending safety.
-- Independent validation, monitoring and compliance review are necessary before real-world deployment.
-
-## 10. Project Deliverables
-
-- CBIM Problem Canvas
-- Reproducible Jupyter Notebook
-- Model comparison and threshold analysis
-- Fairness evaluation
-- Business insight summary
-- Credit policy recommendation
-
----
-
-**Project Status:** Repository setup and business understanding.
+**Project status:** End-to-end research and modelling completed; production deployment not recommended without further validation.
